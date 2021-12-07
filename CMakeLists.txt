@@ -30,6 +30,9 @@ add_executable(${PROJECT_NAME} MACOSX_BUNDLE #WIN32
 	XdfStreamer/xdfstreamer.h
 	XdfStreamer/xdfstreamer.cpp
 	XdfStreamer/xdfstreamer.ui
+        XdfStreamer/dialogprogress.h
+        XdfStreamer/dialogprogress.cpp
+        XdfStreamer/dialogprogress.ui
 )
 
 set_target_properties(${PROJECT_NAME}

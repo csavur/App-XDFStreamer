@@ -6,7 +6,7 @@
 #include <ctime>
 #include <math.h>
 #include <iostream>
-
+#include "dialogprogress.h"
 
 XdfStreamer::XdfStreamer(QWidget *parent) :
     QMainWindow(parent),
@@ -37,6 +37,8 @@ XdfStreamer::XdfStreamer(QWidget *parent) :
     ui->treeWidgetRandomSignal->header()->hide();
     ui->treeWidgetRandomSignal->setColumnCount(2);
     ui->treeWidgetRandomSignal->hide();
+
+    ui->pushButtonProgress->hide();
 
     setWindowTitle("XDF Streamer");
 }
@@ -81,6 +83,7 @@ void XdfStreamer::pushXdfData(const int stream_id, QSharedPointer<lsl::stream_ou
     const int dSamplingInterval = (1.0 / samplingRate)*1000; // in msec
     std::vector<double> sample(channelCount);
 
+    int total_sample_size = xdf->streams[stream_id].time_stamps.size();
     for (unsigned t = 0; t < xdf->streams[stream_id].time_series.front().size(); t++) {
         {
             std::lock_guard<std::mutex> guard(this->mutex_stop_thread);
@@ -102,6 +105,11 @@ void XdfStreamer::pushXdfData(const int stream_id, QSharedPointer<lsl::stream_ou
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(time_to_sleep));
+
+        if (t % samplingRate == 0) {
+//            std::cout << "update emitted " << ((t*1.0)/total_sample_size)*100 << std::endl;
+            emit updateProgress(stream_id, int(((t*1.0)/total_sample_size)*100));
+        }
     }
 
     outlet_ptr.clear();
@@ -368,6 +376,7 @@ void XdfStreamer::on_lineEdit_textChanged(const QString &path)
 void XdfStreamer::on_pushButtonStream_clicked()
 {
     if (ui->pushButtonStream->text().compare("Stream") == 0) {
+        ui->pushButtonProgress->show();
         stopThreads(false);
         if (ui->checkBoxRandomSignal->isChecked()) {
             qDebug() << "Generating synthetic signals";
@@ -396,6 +405,7 @@ void XdfStreamer::on_pushButtonStream_clicked()
             qDebug() << "Load XDF";
 
             // Find the checked streams
+            QMap<int, std::string> stream_names;
             for (size_t i = 0; i < ui->treeWidgetXDF->topLevelItemCount(); ++i) {
                 if (ui->treeWidgetXDF->topLevelItem((int)i)->checkState(0)) {
                     std::cout << "Selected " << i << std::endl;
@@ -407,13 +417,19 @@ void XdfStreamer::on_pushButtonStream_clicked()
                     QSharedPointer<lsl::stream_outlet> outlet_ptr = QSharedPointer<lsl::stream_outlet>(new lsl::stream_outlet(info));
                     // add thread to the list
                     pushThreads.push_back(new std::thread(&XdfStreamer::pushXdfData, this, i, outlet_ptr, samplingRate, channelCount));
+                    stream_names.insert(i, this->xdf->streams[i].info.name);
                 }
             }
 
-            QMessageBox::information(this, tr("Status"), tr("Lab Streaming Layer stream initialized.\n"
-                                                            "Please start LabRecorder and refresh the streams\n"
-                                                            "and/or RT_Receiver_GUI to run simulations."),
-                                     QMessageBox::Ok, QMessageBox::Ok);
+            progress.reset(new DialogProgress(stream_names, this));
+//            DialogProgress *progress = new DialogProgress(stream_names, this);
+            connect(this, &XdfStreamer::updateProgress, progress.get(), &DialogProgress::updateProgress);
+            progress->show();
+
+//            QMessageBox::information(this, tr("Status"), tr("Lab Streaming Layer stream initialized.\n"
+//                                                            "Please start LabRecorder and refresh the streams\n"
+//                                                            "and/or RT_Receiver_GUI to run simulations."),
+//                                     QMessageBox::Ok, QMessageBox::Ok);
         }
 
         ui->pushButtonStream->setText("Stop");
@@ -424,6 +440,9 @@ void XdfStreamer::on_pushButtonStream_clicked()
     }
     else {
         stopThreads(true);
+        ui->pushButtonProgress->hide();
+        if (progress)
+            progress->close();
 
         ui->treeWidgetXDF->setEnabled(true);
         ui->treeWidgetRandomSignal->setEnabled(true);
@@ -463,3 +482,9 @@ void XdfStreamer::on_treeWidgetXDF_itemClicked(QTreeWidgetItem *item)
         }
     }
 }
+
+void XdfStreamer::on_pushButtonProgress_clicked()
+{
+    progress->show();
+}
+

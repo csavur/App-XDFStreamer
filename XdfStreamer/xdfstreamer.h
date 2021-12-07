@@ -7,6 +7,7 @@
 #include <QTreeWidget>
 #include <thread>
 #include <mutex>
+#include "dialogprogress.h"
 
 namespace Ui {
 class XdfStreamer;
@@ -23,6 +24,7 @@ public:
 private:
     Ui::XdfStreamer *ui;
     QSharedPointer<Xdf> xdf;
+    std::unique_ptr<DialogProgress> progress;
 
     std::vector<std::thread *> pushThreads;
 
@@ -45,6 +47,12 @@ private slots:
     void on_lineEdit_textChanged(const QString &arg1);
     void on_pushButtonStream_clicked();
     void on_treeWidgetXDF_itemClicked(QTreeWidgetItem *item);
+
+    void on_pushButtonProgress_clicked();
+
+signals:
+    void updateProgress(int stream_id, int percentage);
+
 };
 
 #endif // XDFSTREAMER_H
