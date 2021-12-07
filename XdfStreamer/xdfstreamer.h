@@ -51,7 +51,7 @@ private slots:
     void on_pushButtonProgress_clicked();
 
 signals:
-    void updateProgress(int stream_id, int percentage);
+    void updateProgress(int stream_id, double percentage);
 
 };
 

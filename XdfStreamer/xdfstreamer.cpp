@@ -7,6 +7,7 @@
 #include <math.h>
 #include <iostream>
 #include "dialogprogress.h"
+#include <chrono>
 
 XdfStreamer::XdfStreamer(QWidget *parent) :
     QMainWindow(parent),
@@ -85,7 +86,13 @@ void XdfStreamer::pushXdfData(const int stream_id, QSharedPointer<lsl::stream_ou
     const double dSamplingInterval = 1.0 / samplingRate;
     std::vector<double> sample(channelCount);
 
-    double starttime = ((double)clock()) / CLOCKS_PER_SEC;
+
+    int total_count = xdf->streams[stream_id].time_stamps.size();
+    int total_sent = 0;
+
+    std::cout << "expected lenght : " << xdf->streams[stream_id].time_stamps[total_count-1] - xdf->streams[stream_id].time_stamps[0] << std::endl;
+
+    auto starttime = std::chrono::steady_clock::now();
 
     for (unsigned t = 0; t < xdf->streams[stream_id].time_series.front().size(); t++) {
         {
@@ -95,13 +102,22 @@ void XdfStreamer::pushXdfData(const int stream_id, QSharedPointer<lsl::stream_ou
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(int(1000*(starttime + t*dSamplingInterval - ((double)clock()/CLOCKS_PER_SEC)))));
+        auto now = std::chrono::steady_clock::now();
+        auto sleep_time = starttime + std::chrono::milliseconds(int(t*dSamplingInterval*1000)) - now;
+
+        std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::milliseconds>(sleep_time));
 
         for (int c = 0; c < channelCount; c++) {
             sample[c] = this->xdf->streams[stream_id].time_series[c][t];
         }
 
         outlet_ptr->push_sample(sample);
+        ++total_sent;
+        if (total_sent % samplingRate == 0) {
+            double percentage = ((total_sent*1.0)/total_count)*100;
+            std::cout << stream_id << " " << percentage << std::endl;
+            emit updateProgress(stream_id, int(percentage));
+        }
     }
 
     outlet_ptr.clear();
@@ -402,7 +418,7 @@ void XdfStreamer::on_pushButtonStream_clicked()
                 if (ui->treeWidgetXDF->topLevelItem((int)i)->checkState(0)) {
                     std::cout << "Selected " << i << std::endl;
 
-                    const int samplingRate = this->xdf->streams[i].info.nominal_srate;
+                    const int samplingRate = this->xdf->streams[i].info.effective_sample_rate;
                     const int channelCount = this->xdf->streams[i].info.channel_count;
 
                     lsl::stream_info info = this->initializeLslStreamsForXdfData(i, samplingRate, channelCount);
