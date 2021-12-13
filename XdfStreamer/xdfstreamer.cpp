@@ -54,7 +54,7 @@ void XdfStreamer::pushRandomData(QSharedPointer<lsl::stream_outlet> outlet_ptr, 
     const double dSamplingInterval = 1.0 / samplingRate;
     std::vector<double> sample(channelCount);
 
-    double starttime = ((double)clock()) / CLOCKS_PER_SEC;
+    auto starttime = std::chrono::steady_clock::now();
 
     for (unsigned t = 0;; t++) {
         {
@@ -65,7 +65,9 @@ void XdfStreamer::pushRandomData(QSharedPointer<lsl::stream_outlet> outlet_ptr, 
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(int(1000*(starttime + t*dSamplingInterval - ((double)clock()/CLOCKS_PER_SEC)))));
+        auto now = std::chrono::steady_clock::now();
+        auto sleep_time = starttime + std::chrono::milliseconds(int(t*dSamplingInterval*1000)) - now;
+        std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::milliseconds>(sleep_time));
 
         for (int c = 0; c < channelCount; c++) {
             /* Generate a sine wave
